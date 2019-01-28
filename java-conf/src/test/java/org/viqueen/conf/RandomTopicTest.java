@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @RunWith(JUnitQuickcheck.class)
-public class RandomScratchPad {
+public class RandomTopicTest {
     // TODO use reflection or something to ensure these are resolved correctly from java.util.Random
     private final static long multiplier = 0x5DEECE66DL;
     private final static long addend = 0xBL;
