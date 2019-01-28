@@ -1,66 +1,92 @@
 package org.viqueen.conf;
 
-import org.junit.Ignore;
-import org.junit.Test;
+import com.pholser.junit.quickcheck.Property;
+import com.pholser.junit.quickcheck.runner.JUnitQuickcheck;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static java.util.Collections.singletonList;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
-@RunWith(Parameterized.class)
+@RunWith(JUnitQuickcheck.class)
 public class RandomScratchPad {
     // TODO use reflection or something to ensure these are resolved correctly from java.util.Random
     private final static long multiplier = 0x5DEECE66DL;
     private final static long addend = 0xBL;
     private final static long mask = (1L << 48) - 1;
 
-    private final Random random;
-    private final RandomIntGenerator randomIntGenerator;
+    private Random random;
+    private RandomIntGenerator randomIntGenerator;
 
-    public RandomScratchPad(long seed) {
-        this.random = new Random(seed);
-        this.randomIntGenerator = new RandomIntGenerator(seed);
+    @Property
+    public void testRandomIntGenerator(long seed) {
+        random = new Random(seed);
+        randomIntGenerator = new RandomIntGenerator(seed);
+        assertThat(random.nextInt()).isEqualTo(randomIntGenerator.next());
+        assertThat(random.nextInt()).isEqualTo(randomIntGenerator.next());
     }
 
-    @Parameterized.Parameters
-    public static Collection<Long> seeds() {
-        return singletonList(
-                2L
-        );
-    }
+    @Property
+    public void testResolveSeeds(long seed) {
+        System.out.println("\n*******");
+        random = new Random(seed);
+        randomIntGenerator = new RandomIntGenerator(seed);
 
-    @Ignore
-    @Test
-    public void testRandomIntGenerator() {
-        assertThat(random.nextInt(), is(randomIntGenerator.next()));
+        int first = randomIntGenerator.next();
+        int second = randomIntGenerator.next();
+
+        long seedMask = RandomIntGenerator.MASK(randomIntGenerator.initialSeed);
+
+        Collection<Long> seeds = RandomIntGenerator.resolveSeeds(first, second);
+
+        seeds.forEach(s -> System.out.println(Long.toBinaryString(s)));
+
+        System.out.println("---");
+        System.out.println(Long.toBinaryString(seedMask));
+        System.out.println(seeds.contains(seedMask));
+
+        assertThat(seeds).isNotEmpty();
+        assertThat(seeds).contains(seedMask);
     }
 
     static class RandomIntGenerator {
         private final AtomicLong seed;
+        private final long initialSeed;
 
         RandomIntGenerator(final long seed) {
-            this.seed = new AtomicLong((seed ^ multiplier) & mask);
+            this.initialSeed = (seed ^ multiplier) & mask;
+            this.seed = new AtomicLong(initialSeed);
         }
 
         int next() {
             long oldSeed = seed.get();
-            long nextSeed = MASK(oldSeed);
-            seed.set(nextSeed);
-            return SHIFT(nextSeed);
+            seed.set(MASK(oldSeed));
+            return (int) SHIFT(MASK(oldSeed));
         }
 
         static long MASK(final long value) {
             return (value * multiplier + addend) & mask;
         }
 
-        static int SHIFT(final long value) {
-            return (int)(value >>> 16);
+        static long SHIFT(final long value) {
+            return (value >>> 16);
+        }
+
+        // TODO : actually explain all of this with words
+        static Collection<Long> resolveSeeds(final long first, final long second) {
+            final Collection<Long> seeds = new LinkedHashSet<>();
+            for (int index = 0; index < 65536; index++) {
+                long tempSeed = first * 65536L + index;
+                if ((int) SHIFT(MASK(tempSeed)) == second) {
+                    seeds.add(tempSeed);
+                    // TODO : explain this with words
+                    seeds.add((tempSeed << 16) >>> 16);
+                }
+            }
+            return seeds;
         }
     }
 
