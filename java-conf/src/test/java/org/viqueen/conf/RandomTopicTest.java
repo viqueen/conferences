@@ -52,12 +52,37 @@ public class RandomTopicTest {
         assertThat(seeds).contains(seedMask);
     }
 
+    @Property
+    public void testPredictRandomInts(long seed) {
+        random = new Random(seed);
+
+        int first = random.nextInt();
+        int second = random.nextInt();
+
+        Collection<Long> seeds = RandomIntGenerator.resolveSeeds(first, second);
+        assertThat(seeds).isNotEmpty();
+
+        long resolveSeed = seeds.iterator().next();
+
+        randomIntGenerator = new RandomIntGenerator(resolveSeed, false);
+        assertThat(randomIntGenerator.next()).isEqualTo(second);
+        assertThat(random.nextInt()).isEqualTo(randomIntGenerator.next());
+        assertThat(random.nextInt()).isEqualTo(randomIntGenerator.next());
+        assertThat(random.nextInt()).isEqualTo(randomIntGenerator.next());
+        assertThat(random.nextInt()).isEqualTo(randomIntGenerator.next());
+    }
+
+
     static class RandomIntGenerator {
         private final AtomicLong seed;
         private final long initialSeed;
 
         RandomIntGenerator(final long seed) {
-            this.initialSeed = (seed ^ multiplier) & mask;
+            this(seed, true);
+        }
+
+        RandomIntGenerator(final long seed, boolean scramble) {
+            this.initialSeed = scramble ? (seed ^ multiplier) & mask : seed;
             this.seed = new AtomicLong(initialSeed);
         }
 
@@ -81,9 +106,12 @@ public class RandomTopicTest {
             for (int index = 0; index < 65536; index++) {
                 long tempSeed = first * 65536L + index;
                 if ((int) SHIFT(MASK(tempSeed)) == second) {
-                    seeds.add(tempSeed);
                     // TODO : explain this with words
-                    seeds.add((tempSeed << 16) >>> 16);
+                    if (tempSeed < 0) {
+                        seeds.add((tempSeed << 16) >>> 16);
+                    } else {
+                        seeds.add(tempSeed);
+                    }
                 }
             }
             return seeds;
